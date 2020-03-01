@@ -2,7 +2,7 @@
 
 namespace
 {
-	const float kThresh = 50.f;
+	const float kThresh = 1000.f;
 }  // namespace
 
 std::vector<cv::Point> FindHarris(const cv::Mat& image, int ksize, float k) 
@@ -49,8 +49,14 @@ std::vector<cv::Point> FindHarris(const cv::Mat& image, int ksize, float k)
 				}
 			}
 
-			auto trace = cv::trace(scatter_matrix);
-			auto score = cv::determinant(scatter_matrix) - k * trace * trace;
+			cv::Mat eigenvalues, eigenvectors;
+			if (!cv::eigen(scatter_matrix, eigenvalues, eigenvectors))
+				continue;
+
+			float trace = static_cast<float>(eigenvalues.data[0] + eigenvalues.data[3]);
+			float det = static_cast<float>(eigenvalues.data[0] * eigenvalues.data[3] - eigenvalues.data[1] * eigenvalues.data[2]);
+
+			auto score = det - k * trace * trace;
 
 			if (score > kThresh)
 			{
