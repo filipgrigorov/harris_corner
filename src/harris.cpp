@@ -11,7 +11,7 @@ std::vector<cv::Point> FindHarris(const cv::Mat& image, int ksize, float k)
 	if (!image.data)
 		return found_corners;
 
-	auto half_ksize = (ksize % 2 == 0) ? ksize / 2 - 1 : ksize / 2;
+	int half_ksize = (ksize % 2 == 0) ? ksize / 2 - 1 : ksize / 2;
 
 	cv::Mat gray;
 	if (image.channels() > 1)
@@ -34,29 +34,33 @@ std::vector<cv::Point> FindHarris(const cv::Mat& image, int ksize, float k)
 	{
 		for (auto col = half_ksize; col < cols - half_ksize; ++col)
 		{
-			cv::Mat scatter_matrix = cv::Mat::zeros(2, 2, CV_32FC1);
+			cv::Mat_<float> scatter_matrix = cv::Mat_<float>::zeros(2, 2);
 
-			auto krows = row + half_ksize;
-			auto kcols = col + half_ksize;
+			auto krows = row + half_ksize + 1;
+			auto kcols = col + half_ksize + 1;
 			for (auto krow = row - half_ksize; krow < krows; ++krow)
 			{
 				for (auto kcol = col - half_ksize; kcol < kcols; ++kcol)
 				{
-					scatter_matrix.data[0] += grad_x.data[krow * kcols + kcol] * grad_x.data[krow * kcols + kcol];  // Ixx
-					scatter_matrix.data[1] += grad_x.data[krow * kcols + kcol] * grad_y.data[krow * kcols + kcol];  // Ixy
-					scatter_matrix.data[2] += grad_x.data[krow * kcols + kcol] * grad_y.data[krow * kcols + kcol];  // Ixy
-					scatter_matrix.data[3] += grad_y.data[krow * kcols + kcol] * grad_y.data[krow * kcols + kcol];  // Iyy
+					float val = 0.f;
+					if (grad_x.data[krow * ksize + kcol] > 0) {
+						val = grad_x.data[krow * ksize + kcol] * grad_x.data[krow * ksize + kcol];
+					}
+					scatter_matrix(0, 0) += grad_x.data[krow * ksize + kcol] * grad_x.data[krow * ksize + kcol];  // Ixx
+					scatter_matrix(0, 1) += grad_x.data[krow * ksize + kcol] * grad_y.data[krow * ksize + kcol];  // Ixy
+					scatter_matrix(1, 0) += scatter_matrix.data[1];												// Ixy
+					scatter_matrix(1, 1) += grad_y.data[krow * ksize + kcol] * grad_y.data[krow * ksize + kcol];  // Iyy
 				}
 			}
 
-			cv::Mat eigenvalues, eigenvectors;
+			cv::Mat_<float> eigenvalues, eigenvectors;
 			if (!cv::eigen(scatter_matrix, eigenvalues, eigenvectors))
 				continue;
 
-			float trace = static_cast<float>(eigenvalues.data[0] + eigenvalues.data[3]);
-			float det = static_cast<float>(eigenvalues.data[0] * eigenvalues.data[3] - eigenvalues.data[1] * eigenvalues.data[2]);
+			float trace = scatter_matrix(0, 0) + scatter_matrix(1, 1);//static_cast<float>(eigenvalues.data[0] + eigenvalues.data[1]);
+			float det = scatter_matrix(0, 0) * scatter_matrix(1, 1);//static_cast<float>(eigenvalues.data[0] * eigenvalues.data[1]);
 
-			auto score = det - k * trace * trace;
+			float score = det - (k * trace * trace);
 
 			if (score > kThresh)
 			{
